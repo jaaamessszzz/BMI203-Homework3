@@ -94,9 +94,9 @@ class align(object):
     def traceback(self):
         # Find maximum score in matrix
 
-        row_max_indicies = self.scoring_matrix.argmax(axis=0)
-        seq_B_high_score = row_max_indicies.argmax(axis=0)
-        seq_A_high_score = self.scoring_matrix.argmax(axis=0)
+        row_max_indicies = np.amax(self.scoring_matrix, axis=0)
+        seq_B_high_score = np.argmax(row_max_indicies, axis=0)
+        seq_A_high_score = np.argmax(self.scoring_matrix, axis=0)
 
         column_index_high = seq_B_high_score
         row_index_high = seq_A_high_score[column_index_high]
@@ -104,10 +104,10 @@ class align(object):
         print("Starting Column index: {}".format(column_index_high))
         print("Starting Row index: {}".format(row_index_high))
 
-        sys.exit()
-
         # Initialize variables needed for traceback
-        current_score = self.scoring_matrix.ix[row_index_high, column_index_high]
+        current_score = self.scoring_matrix[row_index_high, column_index_high]
+
+        print("Current Score: {}".format(current_score))
 
         seq_A_alignment = []
         seq_B_alignment = []
@@ -116,12 +116,12 @@ class align(object):
         current_column_index = column_index_high
 
         # Begin traceback, stop when (above | left | diagonal) == 0
-        while self.scoring_matrix.ix[current_row_index, current_column_index] > 0:
+        while self.scoring_matrix[current_row_index, current_column_index] > 0:
 
             # Get [column, row] index for cell (above | left | diagonal) to current cell with highest score
-            left_score = self.scoring_matrix.ix[current_row_index, current_column_index - 1]
-            above_score = self.scoring_matrix.ix[current_row_index - 1, current_column_index]
-            diag_score = self.scoring_matrix.ix[current_row_index - 1, current_column_index - 1]
+            left_score = self.scoring_matrix[current_row_index, current_column_index - 1]
+            above_score = self.scoring_matrix[current_row_index - 1, current_column_index]
+            diag_score = self.scoring_matrix[current_row_index - 1, current_column_index - 1]
 
             next_move = max(diag_score, left_score, above_score)
             # seq_A - represented across COLUMNS
