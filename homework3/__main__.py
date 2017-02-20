@@ -7,6 +7,8 @@ Usage:
     align.py <substitution_matrix> <sequence_pairs> [options]
     align.py gaps
     align.py thresholds
+    align.py compare [options]
+
 
 Arguments:
     <substitution_matrix>
@@ -23,8 +25,16 @@ Arguments:
         Run routine to determine optimal gap penalties for the BLOSUM50 matrix
         using the previously determined threshold scores
 
+    compare
+        Compare substitution matrices in terms of false positive rate. Also
+        generate ROC curves
+
 
 Options:
+    -n --normalize
+        Normalize the raw scores from the alignment by the length of the
+        shorter of the two sequences
+
     -o --output <path>
         Output the alignments to a file named <path>
         NOT YET IMPLEMENTED
@@ -54,6 +64,10 @@ def determine_thresholds():
             # Set gap opening and extension penalties
             seq_align.gap_opening_penalty = -(gap_opening)
             seq_align.gap_extension_penalty = -(gap_extension)
+
+            # Set substitution matrix to BLOSUM50
+            seq_align.substitution_matrix = pd.read_table(open('./BLOSUM50'), delim_whitespace=True, header=6)
+            seq_align.substitution_matrix = seq_align.substitution_matrix.set_index(seq_align.substitution_matrix.columns.values)
 
             print('\n\n\n\n\n')
             print("TESTING THE FOLLOWING GAP OPENING AND EXTENSION PENALTIES:")
@@ -94,6 +108,10 @@ def determine_gap_penalties():
         seq_align.gap_opening_penalty = -(row['Gap_opening'])
         seq_align.gap_extension_penalty = -(row['Gap_extension'])
 
+        # Set substitution matrix to BLOSUM50
+        seq_align.substitution_matrix = pd.read_table(open('./BLOSUM50'), delim_whitespace=True, header=6)
+        seq_align.substitution_matrix = seq_align.substitution_matrix.set_index(seq_align.substitution_matrix.columns.values)
+
         print('\n\n\n\n\n')
         print("TESTING THE FOLLOWING GAP OPENING AND EXTENSION PENALTIES:")
         print("GAP OPENING: {}".format(seq_align.gap_opening_penalty))
@@ -114,10 +132,72 @@ def determine_gap_penalties():
 
     gap_thresholds.to_csv('False_Positives.csv')
 
+def compare_matrices_and_generate_ROC(normalize):
+    """
+    Compare the different subsitution matrices in terms of false positives
+
+    Parameters
+    ----------
+    normalize
+
+    """
+    # Initialize variables and stuff
+    substitution_matrices = ['BLOSUM50', 'BLOSUM62', 'MATIO', 'PAM100', 'PAM250']
+    matrix_false_pos = pd.DataFrame(columns=['Matrix', 'False_Positive_Rate'])
+
+    for sub_matrix in substitution_matrices:
+        # Find 0.7 threshold for given Matrix
+        seq_align = align()
+        seq_align.working_pairs = open('./Pospairs.txt')
+
+        print('\n\n\n\n\n')
+        print("OBTAINING THRESHOLD SCORE FOR {}".format(sub_matrix))
+        print('\n\n\n\n\n')
+
+        # Set substitution matrix to BLOSUM50
+        seq_align.substitution_matrix = pd.read_table(open('./{}'.format(sub_matrix)), delim_whitespace=True, header=6)
+        seq_align.substitution_matrix = seq_align.substitution_matrix.set_index(seq_align.substitution_matrix.columns.values)
+
+        run_alignments(seq_align)
+
+        # Sort max scores for all pospairs and take 15th lowest score as 0.7 threshold
+        threshold_score = sorted(seq_align.max_alignment_score)[14]
+
+        print('\n\n\n\n\n')
+        print("{} THRESHOLD: {}".format(sub_matrix, threshold_score))
+
+        # Find false positive rate using previously found threshold value
+        seq_align = align()
+        seq_align.working_pairs = open('./Negpairs.txt')
+
+        print('\n\n\n\n\n')
+        print("DETERMINING FALSE POSITIVE RATE FOR {}".format(sub_matrix))
+        print('\n\n\n\n\n')
+
+        run_alignments(seq_align)
+
+        # Get counts for elements that get scores above threshold
+        above_threshold = [element for element in seq_align.max_alignment_score if element > threshold_score]
+        false_positive_rate = len(above_threshold)/50
+        print("False Positive Rate: {}".format(false_positive_rate))
+        new_row = pd.Series({'Matrix': sub_matrix,
+                             'False_Positive_Rate:': false_positive_rate
+                             })
+
+        matrix_false_pos = matrix_false_pos.append(new_row, ignore_index=True)
+
+    matrix_false_pos.to_csv("Compare_matrices.csv")
+
+
 def run_alignments(seq_align):
-    # Set substitution matrix to BLOSUM50
-    seq_align.substitution_matrix = pd.read_table(open('./BLOSUM50'), delim_whitespace=True, header=6)
-    seq_align.substitution_matrix = seq_align.substitution_matrix.set_index(seq_align.substitution_matrix.columns.values)
+    """
+    Core code to run alignments between two sequences
+
+    Parameters
+    ----------
+    seq_align
+
+    """
 
     for working_pair in seq_align.working_pairs:
         seq_align.seq_A = SeqIO.read(working_pair.split()[0], 'fasta').upper()
@@ -163,3 +243,11 @@ if __name__ == '__main__':
 
     if args['gaps'] == True:
         determine_gap_penalties()
+
+    if args['compare'] == True:
+        if args['--normalize']:
+            normalize = True
+        else:
+            normalize = False
+
+        compare_matrices_and_generate_ROC(normalize)
