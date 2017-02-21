@@ -159,7 +159,13 @@ def compare_matrices(normalize):
         score_dict[sub_matrix] = {}
 
         # Find 0.7 threshold for given Matrix
-        seq_align = align()
+        if normalize == True:
+            seq_align = align(normalize=True)
+            print('\n\n\n\n\n')
+            print("NORMALIZING SCORES")
+            print(seq_align.normalize)
+        else:
+            seq_align = align()
         seq_align.working_pairs = open('./Pospairs.txt')
 
         print('\n\n\n\n\n')
@@ -181,7 +187,10 @@ def compare_matrices(normalize):
         print("{} THRESHOLD: {}".format(sub_matrix, score_dict[sub_matrix]['threshold']))
 
         # Find false positive rate using previously found threshold value
-        seq_align = align()
+        if normalize == True:
+            seq_align = align(normalize=True)
+        else:
+            seq_align = align()
         seq_align.working_pairs = open('./Negpairs.txt')
 
         print('\n\n\n\n\n')
@@ -241,14 +250,17 @@ def generate_ROC(score_dict):
     for matrix in score_dict:
         # Combine true_pos and false_pos score lists
         ruler_set = set()
+
         for asdf in score_dict[matrix]['tp']:
             ruler_set.add(asdf)
         for asdf in score_dict[matrix]['fp']:
             ruler_set.add(asdf)
 
+        print(score_dict[matrix]['tp'])
+        print(score_dict[matrix]['fp'])
+        print(ruler_set)
 
         ruler = sorted(list(ruler_set), reverse=True)
-        max_value = max(ruler)
 
         # Get counts of values above threshold in tp and fp lists
         tp_threshold_count = len([element for element in score_dict[matrix]['tp'] if element > score_dict[matrix]['threshold']])
@@ -258,7 +270,7 @@ def generate_ROC(score_dict):
         y = [] # True positive
 
         # Count and append hits to x-axis and y-axis lists
-        for tick in np.arange(0, max_value + 1, 0.1): # Necessary for step function...
+        for tick in ruler:
             x.append(len([element for element in score_dict[matrix]['fp'] if element >= tick and element >= score_dict[matrix]['threshold']])/fp_threshold_count)
             y.append(len([element for element in score_dict[matrix]['tp'] if element >= tick and element >= score_dict[matrix]['threshold']])/tp_threshold_count)
 
@@ -269,7 +281,7 @@ def generate_ROC(score_dict):
     plt.ylim([0.0, 1.0])
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
-    plt.title('Receiver operating characteristic')
+    plt.title('Receiver operating characteristic - Normalized')
     plt.legend(loc="lower right")
     plt.show()
     fig.savefig('Matrix_ROC.pdf', dpi=300)

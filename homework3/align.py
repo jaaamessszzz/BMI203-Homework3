@@ -5,7 +5,7 @@ import pandas as pd
 from Bio import SeqIO
 
 class align(object):
-    def __init__(self):
+    def __init__(self, normalize=False):
         self.substitution_matrix = None
         self.scoring_matrix = pd.DataFrame()
         self.seq_A = None
@@ -15,6 +15,7 @@ class align(object):
         self.gap_extension_penalty = -4
         self.extending_gap = False
 
+        self.normalize = normalize
         self.max_alignment_score = []
 
     def initialize_scoring_matrix(self):
@@ -75,7 +76,7 @@ class align(object):
                     self.scoring_matrix[row_index, column_index] = final_score if final_score > 0 else 0
 
         assert len(np.argwhere(self.scoring_matrix == -1)) == 0, "The scoring matrix was not completely filled in!"
-        np.savetxt("SCORE_current.csv", self.scoring_matrix, delimiter=",")
+        # np.savetxt("SCORE_current.csv", self.scoring_matrix, delimiter=",")
 
     def traceback(self):
         # Find maximum score in matrix
@@ -94,7 +95,18 @@ class align(object):
         current_score = self.scoring_matrix[row_index_high, column_index_high]
 
         # Record maximum scores for each alignment
-        self.max_alignment_score.append(current_score)
+        if self.normalize == True:
+            shorter_length = min(len(self.seq_A.seq), len(self.seq_B.seq))
+            self.max_alignment_score.append(current_score / shorter_length)
+
+            print("NORMALIZE == TRUE")
+            print("SHORTER LENGTH: {}".format(shorter_length))
+            print("NORMALIZED SCORE: {}".format(current_score / shorter_length))
+
+        else:
+            print("NORMALIZE == FALSE")
+
+            self.max_alignment_score.append(current_score)
 
         print("Current Score: {}".format(current_score))
 
