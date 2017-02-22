@@ -220,7 +220,7 @@ def compare_matrices(normalize):
         matrix_false_pos = matrix_false_pos.append(new_row, ignore_index=True)
 
     generate_ROC(score_dict)
-    # matrix_false_pos.to_csv("Compare_matrices.csv")
+    matrix_false_pos.to_csv("Compare_matrices.csv")
 
 
 def generate_ROC(score_dict):
@@ -284,10 +284,10 @@ def generate_ROC(score_dict):
     plt.ylim([0.0, 1.0])
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
-    plt.title('Receiver operating characteristic - Normalized')
+    plt.title('Receiver operating characteristic - Raw')
     plt.legend(loc="lower right")
     plt.show()
-    fig.savefig('Matrix_ROC.pdf', dpi=300)
+    fig.savefig('Matrix_ROC-Raw.pdf', dpi=300)
 
 
 def run_alignments(seq_align, save_output=None):
@@ -331,16 +331,14 @@ def _crappy_parser(file_name):
         temp_list = []
 
         for line in align:
-            if line[0] == '>':
-                print(line.strip())
-            else:
+            if line[0] != '>':
                 temp_list.append(line.strip())
 
             if len(temp_list) == 3:
                 seq_list.append(temp_list)
                 temp_list = []
 
-        print("\n{} imported\n".format(file_name))
+        print("\n{} imported".format(file_name))
 
         return seq_list
 
@@ -362,25 +360,22 @@ def matrix_optimization():
     """
 
     # Set substitution matrix to PAM100
-    working_substitution_matrix = pd.read_table(open('./PAM100'), delim_whitespace=True, header=9)
+    working_substitution_matrix = pd.read_table(open('./BLOSUM50'), delim_whitespace=True, header=6)
     possible_AA = working_substitution_matrix.columns.values
     working_substitution_matrix = working_substitution_matrix.set_index(possible_AA)
 
     # Set gap penalties
-    gap_opening = -9
+    gap_opening = -6
     gap_extension = -4
 
     # Import saved positive and negative alignments and save to list of lists
     # [Seq_A, bar_things, Seq_B]
-    neg_seq_list = _crappy_parser('Optimize_neg.txt')
-    pos_seq_list = _crappy_parser('Optimize_pos.txt')
+    neg_seq_list = _crappy_parser('Alignments-neg.txt')
+    pos_seq_list = _crappy_parser('Alignments-pos.txt')
 
     # Calculate AA frequencies in Positive alignments
     all_pos_align_sequences = [element[0] + element[2] for element in pos_seq_list]
     one_big_pos_sequence = re.sub('[^ARNDCQEGHILKMFPSTWYVBZX*]', '', ''.join(all_pos_align_sequences))
-    print(one_big_pos_sequence)
-
-    sys.exit()
 
     mat_dict = {'A': 0,
                 'R': 1,
@@ -418,7 +413,8 @@ def matrix_optimization():
 
     # Run MC
     for temperature in temperatures:
-        for increment in range(2000):
+        print("Current Temp: {}".format(temperature))
+        for increment in range(100):
             # Generate new matrix
             first_AA = mat_dict[random.choice(one_big_pos_sequence)]
             second_AA = mat_dict[random.choice(one_big_pos_sequence)]
@@ -433,16 +429,21 @@ def matrix_optimization():
             extending = False
 
             for alignment in neg_seq_list:
+
+                # print(alignment[0])
+                # print(alignment[1])
+                # print(alignment[2])
+
                 for seq_A, seq_B in zip(alignment[0], alignment[2]):
-                    print(seq_A)
                     if seq_A == '-' or seq_B == '-':
                         if extending == False:
                             current_score.append(gap_opening)
                             extending = True
                         else:
                             current_score.append(gap_extension)
+                            pass
                     else:
-                        current_score.append(working_substitution_matrix.ix[seq_A, seq_B])
+                        current_score.append(current_matrix[mat_dict[seq_A], mat_dict[seq_B]])
                         extending = False
 
                 print(current_score)
@@ -453,13 +454,13 @@ def matrix_optimization():
 
             # Calculate TP scores and get TPR for each FP threshold
             FP_thresholds = [sorted(FP_scores)[49], sorted(FP_scores)[44], sorted(FP_scores)[39], sorted(FP_scores)[34]]
-            print(FP_thresholds)
+            print('FP_Thresholds: {}'.format(FP_thresholds))
 
             TP_scores = []
             current_score = []
             extending = False
 
-            for alignment in neg_seq_list:
+            for alignment in pos_seq_list:
                 for seq_A, seq_B in zip(alignment[0], alignment[2]):
                     if seq_A == '-' or seq_B == '-':
                         if extending == False:
@@ -467,17 +468,22 @@ def matrix_optimization():
                             extending = True
                         else:
                             current_score.append(gap_extension)
+                            pass
                     else:
-                        current_score.append(working_substitution_matrix.ix[seq_A, seq_B])
+                        current_score.append(current_matrix[mat_dict[seq_A], mat_dict[seq_B]])
                         extending = False
 
                 print(current_score)
-                print(sum(current_score))
+                print(sum(current_score), '\n')
 
                 TP_scores.append(sum(current_score))
                 current_score = []
 
             sum_TPR = sum([len([element for element in TP_scores if element > threshold])/50 for threshold in FP_thresholds])
+
+            print([len([element for element in TP_scores if element > threshold])/50 for threshold in FP_thresholds])
+            print(TP_scores)
+            print('sum_TPR: {}'.format(sum_TPR))
 
             # Reject/Accept
             if sum_TPR > accepted_TPR:

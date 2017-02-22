@@ -13,7 +13,7 @@ class align(object):
         self.seq_B = None
 
         # Gap opening and extension related
-        self.gap_opening_penalty = -9
+        self.gap_opening_penalty = -6
         self.gap_extension_penalty = -4
         # Keep track of gap openings across rows (iterate over rows to fill matrix so this is easy)
         self.extending_gap = False
@@ -50,14 +50,14 @@ class align(object):
         for row in np.arange(len(self.seq_B) + 1):
             self.scoring_matrix[row, 0] = 0
 
-        # Make a list to keep track of column gap openings...
+        # Make a list to keep track of column gap openings
         seq_A_gap_openings = [False] * (len(self.seq_A) + 1)
 
         # Iterate over rows and fill in the matrix based on substitution matrix
         for row_index, row in enumerate(self.scoring_matrix):
 
             # Reset row gap opening bool at start of each new row
-            self.extending_gap = False
+            extending_gap = False
 
             for column_index in np.arange(len(row)):
                 if row_index > 0 and column_index > 0:
@@ -66,20 +66,16 @@ class align(object):
                     similarity_score = self.substitution_matrix.ix[str(self.seq_B.seq[row_index - 1]), str(self.seq_A.seq[column_index - 1])]
 
                     # Decide whether to use gap_extension or gap_opening penalty score across rows
-                    if self.extending_gap == False:
+                    if extending_gap == False:
                         gap_penalty_left = self.gap_opening_penalty
-                        # print('Row opening:', self.gap_opening_penalty, gap_penalty_left) # Debugging
                     else:
                         gap_penalty_left = self.gap_extension_penalty
-                        # print('Row extension:', self.gap_extension_penalty, gap_penalty_left) # Debugging
 
                     # Decide whether to use gap extension or gap opening penalty score down columns
                     if seq_A_gap_openings[column_index] == False:
                         gap_penalty_up = self.gap_opening_penalty
-                        # print('Columns opening:', self.gap_opening_penalty, gap_penalty_up)  # Debugging
                     else:
                         gap_penalty_up = self.gap_extension_penalty
-                        # print('Columns extension:', self.gap_extension_penalty, gap_penalty_up)  # Debugging
 
                     # Calculate possible scores for current cell in scoring matrix
                     score_up = self.scoring_matrix[row_index - 1, column_index] + gap_penalty_up
@@ -92,20 +88,22 @@ class align(object):
                     # Toggle gap_opening or gap_extension across rows and down columns
                     # Priority diag > left > up
                     if max(score_up, score_left, score_diag) == score_diag:
-                        self.extending_gap = False
-                        seq_A_gap_openings[column_index - 1] = False
+                        extending_gap = False
+                        seq_A_gap_openings[column_index] = False
                     elif max(score_up, score_left, score_diag) == score_left:
-                        self.extending_gap = True
+                        extending_gap = True
+                        seq_A_gap_openings[column_index] = False
                     else: # max(score_up, score_left, score_diag) == score_up
                         seq_A_gap_openings[column_index] = True
+                        extending_gap = False
 
                     self.scoring_matrix[row_index, column_index] = final_score if final_score > 0 else 0
 
         assert len(np.argwhere(self.scoring_matrix == -1)) == 0, "The scoring matrix was not completely filled in!"
 
-        # names = re.split('/|\.', working_pair.strip())
-        # file_name = '_'.join([names[1], names[3]])
-        # np.savetxt("{}.csv".format(file_name), self.scoring_matrix, delimiter=",")
+        names = re.split('/|\.', working_pair.strip())
+        file_name = '_'.join([names[1], names[3]])
+        np.savetxt("{}.csv".format(file_name), self.scoring_matrix, delimiter=",")
 
     def traceback(self):
         # Find maximum score in matrix
@@ -190,3 +188,6 @@ class align(object):
         seq_B_string = ''.join(reversed(seq_B_alignment))
 
         return seq_A_string, bar_things, seq_B_string
+
+    def traceback_II(self):
+        pass
