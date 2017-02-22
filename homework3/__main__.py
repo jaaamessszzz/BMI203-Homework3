@@ -313,7 +313,7 @@ def run_alignments(seq_align, save_output=None):
         # Do work
         seq_align.initialize_scoring_matrix()
         seq_align.fill_in_matrix(working_pair)
-        seq_A_string, bar_things, seq_B_string = seq_align.traceback()
+        seq_A_string, bar_things, seq_B_string = seq_align.traceback_II()
 
         if save_output:
             output.write('>{}\n'.format(write_counter))
@@ -321,7 +321,6 @@ def run_alignments(seq_align, save_output=None):
             output.write(seq_A_string + '\n')
             output.write(bar_things + '\n')
             output.write(seq_B_string + '\n')
-
 
 
 def _crappy_parser(file_name):
