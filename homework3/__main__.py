@@ -8,6 +8,7 @@ Usage:
     align.py gaps
     align.py thresholds
     align.py compare [options]
+    align.py optimize
 
 
 Arguments:
@@ -19,7 +20,7 @@ Arguments:
 
     thresholds
         Run routine to determine the 0.7 score threshold for each gap opening/
-        extension penalt combination
+        extension penalty combination
 
     gaps
         Run routine to determine optimal gap penalties for the BLOSUM50 matrix
@@ -29,6 +30,9 @@ Arguments:
         Compare substitution matrices in terms of false positive rate. Also
         generate ROC curves
 
+    optimize
+        Run algorithm to optimize scoring matrix...
+
 
 Options:
     -n --normalize
@@ -36,8 +40,7 @@ Options:
         shorter of the two sequences
 
     -o --output <path>
-        Output the alignments to a file named <path>
-        NOT YET IMPLEMENTED
+        Save alignment output to a file named <path>
 
 """
 
@@ -87,7 +90,7 @@ def determine_thresholds():
 
             record_thresholds = record_thresholds.append(new_row, ignore_index=True)
 
-    record_thresholds.to_csv('Thresholds-asdf.csv')
+    record_thresholds.to_csv('Thresholds.csv')
 
 def determine_gap_penalties():
     """
@@ -287,7 +290,7 @@ def generate_ROC(score_dict):
     fig.savefig('Matrix_ROC.pdf', dpi=300)
 
 
-def run_alignments(seq_align):
+def run_alignments(seq_align, save_output=None):
     """
     Core code to run alignments between two sequences
 
@@ -296,6 +299,9 @@ def run_alignments(seq_align):
     seq_align
 
     """
+    if save_output:
+        output = open(save_output, 'w+')
+        write_counter = 1
 
     for working_pair in seq_align.working_pairs:
         seq_align.seq_A = SeqIO.read(working_pair.split()[0], 'fasta').upper()
@@ -306,8 +312,185 @@ def run_alignments(seq_align):
 
         # Do work
         seq_align.initialize_scoring_matrix()
-        seq_align.fill_in_matrix()
-        seq_align.traceback()
+        seq_align.fill_in_matrix(working_pair)
+        seq_A_string, bar_things, seq_B_string = seq_align.traceback()
+
+        if save_output:
+            output.write('>{}\n'.format(write_counter))
+            write_counter += 1
+            output.write(seq_A_string + '\n')
+            output.write(bar_things + '\n')
+            output.write(seq_B_string + '\n')
+
+
+
+def _crappy_parser(file_name):
+
+        align = open(file_name)
+        seq_list = []
+        temp_list = []
+
+        for line in align:
+            if line[0] == '>':
+                print(line.strip())
+            else:
+                temp_list.append(line.strip())
+
+            if len(temp_list) == 3:
+                seq_list.append(temp_list)
+                temp_list = []
+
+        print("\n{} imported\n".format(file_name))
+
+        return seq_list
+
+
+def matrix_optimization():
+    """
+    Optimize the matrix... somehow...
+    Objective function: sum of TPR for FPRs 0, 0.1, 0.2, 0.3
+
+    SIMULATED ANNEALING MONTE CARLO WITH METROPOLIS HASTINGS CRITERIA
+    Sample weighted for AA frequency in alignment sequences
+    Select random AA pairs, change value in matrix
+    Calculate objective function value
+        If current < previous, accept new matrix
+        Else, calculate boltzmann probability (e^-(d(score / kT))), accept if > ( 0 > randint > 1 )
+    Increment temperature every 100 or so iterations
+
+    This is going to be super slow...
+    """
+
+    # Set substitution matrix to PAM100
+    working_substitution_matrix = pd.read_table(open('./PAM100'), delim_whitespace=True, header=9)
+    possible_AA = working_substitution_matrix.columns.values
+    working_substitution_matrix = working_substitution_matrix.set_index(possible_AA)
+
+    # Set gap penalties
+    gap_opening = -9
+    gap_extension = -4
+
+    # Import saved positive and negative alignments and save to list of lists
+    # [Seq_A, bar_things, Seq_B]
+    neg_seq_list = _crappy_parser('Optimize_neg.txt')
+    pos_seq_list = _crappy_parser('Optimize_pos.txt')
+
+    # Calculate AA frequencies in Positive alignments
+    all_pos_align_sequences = [element[0] + element[2] for element in pos_seq_list]
+    one_big_pos_sequence = re.sub('[^ARNDCQEGHILKMFPSTWYVBZX*]', '', ''.join(all_pos_align_sequences))
+    print(one_big_pos_sequence)
+
+    sys.exit()
+
+    mat_dict = {'A': 0,
+                'R': 1,
+                'N': 2,
+                'D': 3,
+                'C': 4,
+                'Q': 5,
+                'E': 6,
+                'G': 7,
+                'H': 8,
+                'I': 9,
+                'L': 10,
+                'K': 11,
+                'M': 12,
+                'F': 13,
+                'P': 14,
+                'S': 15,
+                'T': 16,
+                'W': 17,
+                'Y': 18,
+                'V': 19,
+                'B': 20,
+                'Z': 21,
+                'X': 22,
+                '*': 23
+                }
+
+    # MC!
+    accepted_matrix = None
+    current_matrix = working_substitution_matrix.values
+    accepted_TPR = 0
+    temperatures = [1, 0.8, 0.6, 0.4, 0.2, 0.1]
+
+    import random
+
+    # Run MC
+    for temperature in temperatures:
+        for increment in range(2000):
+            # Generate new matrix
+            first_AA = mat_dict[random.choice(one_big_pos_sequence)]
+            second_AA = mat_dict[random.choice(one_big_pos_sequence)]
+
+            # Maintain symmetry
+            current_matrix[first_AA, second_AA] = current_matrix[first_AA, second_AA] + random.uniform(-1, 1) * temperature
+            current_matrix[second_AA, first_AA] = current_matrix[first_AA, second_AA] + random.uniform(-1, 1) * temperature
+
+            # Get FP thresholds from saved alignment
+            FP_scores = []
+            current_score = []
+            extending = False
+
+            for alignment in neg_seq_list:
+                for seq_A, seq_B in zip(alignment[0], alignment[2]):
+                    print(seq_A)
+                    if seq_A == '-' or seq_B == '-':
+                        if extending == False:
+                            current_score.append(gap_opening)
+                            extending = True
+                        else:
+                            current_score.append(gap_extension)
+                    else:
+                        current_score.append(working_substitution_matrix.ix[seq_A, seq_B])
+                        extending = False
+
+                print(current_score)
+                print(sum(current_score))
+
+                FP_scores.append(sum(current_score))
+                current_score = []
+
+            # Calculate TP scores and get TPR for each FP threshold
+            FP_thresholds = [sorted(FP_scores)[49], sorted(FP_scores)[44], sorted(FP_scores)[39], sorted(FP_scores)[34]]
+            print(FP_thresholds)
+
+            TP_scores = []
+            current_score = []
+            extending = False
+
+            for alignment in neg_seq_list:
+                for seq_A, seq_B in zip(alignment[0], alignment[2]):
+                    if seq_A == '-' or seq_B == '-':
+                        if extending == False:
+                            current_score.append(gap_opening)
+                            extending = True
+                        else:
+                            current_score.append(gap_extension)
+                    else:
+                        current_score.append(working_substitution_matrix.ix[seq_A, seq_B])
+                        extending = False
+
+                print(current_score)
+                print(sum(current_score))
+
+                TP_scores.append(sum(current_score))
+                current_score = []
+
+            sum_TPR = sum([len([element for element in TP_scores if element > threshold])/50 for threshold in FP_thresholds])
+
+            # Reject/Accept
+            if sum_TPR > accepted_TPR:
+                accepted_TPR = sum_TPR
+                accepted_matrix = current_matrix
+            else:
+                pass_limit = random.uniform(0, 1)
+                boltz = np.exp(-((sum_TPR - accepted_TPR)/temperature))
+                if boltz > pass_limit:
+                    accepted_TPR = sum_TPR
+                    accepted_matrix = current_matrix
+
+    optimized_matrix = np.savetxt("Optimized_matrix.csv", accepted_matrix, delimiter=",")
 
 
 if __name__ == '__main__':
@@ -328,7 +511,20 @@ if __name__ == '__main__':
 
     # Set substitution matrix
     if args['<substitution_matrix>']:
-        seq_align.substitution_matrix = pd.read_table(open('./{}'.format(args['<substitution_matrix>'])), delim_whitespace=True, header=6)
+        # Initialize variables and stuff
+
+        substitution_matrices = {'BLOSUM50': 6,
+                                 'BLOSUM62': 6,
+                                 'MATIO': 2,
+                                 'PAM100': 9,
+                                 'PAM250': 9
+                                 }
+
+        seq_align.substitution_matrix = pd.read_table(open('./{}'.format(args['<substitution_matrix>'])),
+                                                      delim_whitespace=True,
+                                                      header=substitution_matrices[args['<substitution_matrix>']]
+                                                      )
+
         seq_align.substitution_matrix = seq_align.substitution_matrix.set_index(seq_align.substitution_matrix.columns.values)
 
         seq_align.substitution_matrix.to_csv('{}.csv'.format(args['<substitution_matrix>']))
@@ -336,7 +532,7 @@ if __name__ == '__main__':
     # Import sequences to align
     if args['<sequence_pairs>']:
         seq_align.working_pairs = open(args['<sequence_pairs>'])
-        run_alignments(seq_align)
+        run_alignments(seq_align, args['--output'])
 
     if args['thresholds'] == True:
         determine_thresholds()
@@ -351,3 +547,6 @@ if __name__ == '__main__':
             normalize = False
 
         compare_matrices(normalize)
+
+    if args['optimize'] == True:
+        matrix_optimization()
