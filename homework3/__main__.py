@@ -4,11 +4,11 @@
 Align sequences using a given substitution matrix
 
 Usage:
-    align.py <substitution_matrix> <sequence_pairs> [options]
-    align.py gaps
-    align.py thresholds
-    align.py compare [options]
-    align.py optimize
+    homework3 align <substitution_matrix> <sequence_pairs> [options]
+    homework3 gaps
+    homework3 thresholds
+    homework3 compare [options]
+    homework3 optimize <matrix_to_optimize>
 
 
 Arguments:
@@ -17,6 +17,9 @@ Arguments:
 
     <sequence_pairs>
         Name of file containing space delimited pairs of sequences to align
+
+    align
+        Run alignment with specified substitution matrix and sequence pairs
 
     thresholds
         Run routine to determine the 0.7 score threshold for each gap opening/
@@ -33,6 +36,9 @@ Arguments:
     optimize
         Run algorithm to optimize scoring matrix...
 
+    <matrix_to_optimize>
+        Name of the matrix to run optimization on
+
 
 Options:
     -n --normalize
@@ -41,6 +47,11 @@ Options:
 
     -o --output <path>
         Save alignment output to a file named <path>
+
+    -c --compare_optimized <matrix>
+        Compare 1) default matrix, 2) optimized scoring matrix against default
+        matrix alignments, and 3) optimized scoring matrix against optimized
+        alignments
 
 """
 
@@ -135,7 +146,7 @@ def determine_gap_penalties():
 
     gap_thresholds.to_csv('False_Positives.csv')
 
-def compare_matrices(normalize):
+def compare_matrices(normalize, compare_optimized):
     """
     Compare the different substitution matrices in terms of false positives
 
@@ -223,7 +234,114 @@ def compare_matrices(normalize):
     matrix_false_pos.to_csv("Compare_matrices.csv")
 
 
-def generate_ROC(score_dict):
+def compare_optimized(matrix):
+    """
+    Compare:
+        1. default matrix with default alignments
+        2. optimized scoring matrix against default alignments
+        3. optimized scoring matrix against optimized alignments
+
+    Import alignments from align output and use those to generate score_dicts
+    """
+    # Initialize
+    gap_opening = -7
+    gap_extension = -2
+
+    # Import sequence alignments to list of lists
+    default_pos = _crappy_parser('Alignments-{}-pos.txt'.format(matrix))
+    default_neg = _crappy_parser('Alignments-{}-neg.txt'.format(matrix))
+    optimized_pos = _crappy_parser('Alignments-{}_Optimized-pos.txt'.format(matrix))
+    optimized_neg = _crappy_parser('Alignments-{}_Optimized-neg.txt'.format(matrix))
+
+    # Import default and optmized matrices
+    substitution_matrices = {'BLOSUM50': 6,
+                             'BLOSUM62': 6,
+                             'BLOSUM62-Optimized': 0,
+                             'MATIO': 2,
+                             'MATIO-Optimized': 0,
+                             'PAM100': 9,
+                             'PAM250': 9
+                             }
+
+    default_matrix = np.loadtxt(matrix, skiprows=(substitution_matrices[matrix] + 1))
+    optimized_matrix = np.loadtxt("{}-Optimized".format(matrix), skiprows=(substitution_matrices["{}-Optimized".format(matrix)] + 1))
+
+    # Calculate FPR/TPR (Ripped from matrix optmization code)
+    mat_dict = {'A': 0, 'R': 1, 'N': 2, 'D': 3, 'C': 4, 'Q': 5,
+                'E': 6, 'G': 7, 'H': 8, 'I': 9, 'L': 10, 'K': 11,
+                'M': 12, 'F': 13, 'P': 14, 'S': 15, 'T': 16, 'W': 17,
+                'Y': 18, 'V': 19, 'B': 20, 'Z': 21, 'X': 22, '*': 23
+                }
+
+    alignments = {'default_pos': default_pos,
+                  'default_neg': default_neg,
+                  'optimized_pos': optimized_pos,
+                  'optimized_neg': optimized_neg
+                  }
+
+    matricies = {'optimized_matrix': optimized_matrix,
+                 'default_matrix': default_matrix}
+
+    score_lists = {}
+
+    for matrix in matricies:
+        for alignment in alignments:
+
+            prealigned_sequences = alignments[alignment]
+
+            scores = []
+
+            for prealigned_sequence in prealigned_sequences:
+                current_score = []
+                extending = False
+
+                print(prealigned_sequence[0])
+                print(prealigned_sequence[1])
+                print(prealigned_sequence[2])
+
+                # Score each pair in alignment
+                for seq_A, seq_B in zip(prealigned_sequence[0], prealigned_sequence[2]):
+                    if seq_A == '-' or seq_B == '-':
+                        if extending == False:
+                            current_score.append(gap_opening)
+                            extending = True
+                        else:
+                            current_score.append(gap_extension)
+                            pass
+                    else:
+                        current_score.append(matricies[matrix][mat_dict[seq_A], mat_dict[seq_B]])
+                        extending = False
+
+                print(current_score)
+                print(sum(current_score))
+
+                scores.append(sum(current_score))
+
+            score_lists['-'.join([matrix, alignment])] = scores
+
+
+    import pprint
+    pprint.pprint(score_lists)
+
+    # Construct score_dict
+    score_dict = {'default_matrix-default_alignments': {'tp': score_lists['default_matrix-default_pos'],
+                                                        'fp': score_lists['default_matrix-default_neg'],
+                                                        'threshold': score_lists['default_matrix-default_pos'][14]
+                                                        },
+                  'optimized_matrix-default_alignments': {'tp': score_lists['optimized_matrix-default_pos'],
+                                                          'fp': score_lists['optimized_matrix-default_neg'],
+                                                          'threshold': score_lists['optimized_matrix-default_pos'][14]
+                                                          },
+                  'optimized_matrix-optimized_alignments': {'tp': score_lists['optimized_matrix-optimized_pos'],
+                                                            'fp': score_lists['optimized_matrix-optimized_neg'],
+                                                            'threshold': score_lists['optimized_matrix-optimized_pos'][14]
+                                                            }
+                  }
+
+    generate_ROC(score_dict, optimized=True)
+
+
+def generate_ROC(score_dict, optimized=False):
     """
     Plot false_pos vs. true_pos in ROC
     For a given substitution matrix:
@@ -243,12 +361,18 @@ def generate_ROC(score_dict):
     fig = plt.figure(figsize=(8, 8), facecolor='white')
     lw = 2
 
-    colors = {'BLOSUM50': sns.xkcd_rgb["pale red"],
-              'BLOSUM62': sns.xkcd_rgb["grass"],
-              'MATIO': sns.xkcd_rgb["cerulean"],
-              'PAM100': sns.xkcd_rgb["purplish"],
-              'PAM250': sns.xkcd_rgb["golden yellow"]
-              }
+    if optimized:
+        colors = {'default_matrix-default_alignments': sns.xkcd_rgb["pale red"],
+                  'optimized_matrix-optimized_alignments': sns.xkcd_rgb["grass"],
+                  'optimized_matrix-default_alignments': sns.xkcd_rgb["golden yellow"]
+                  }
+    else:
+        colors = {'BLOSUM50': sns.xkcd_rgb["pale red"],
+                  'BLOSUM62': sns.xkcd_rgb["grass"],
+                  'MATIO': sns.xkcd_rgb["cerulean"],
+                  'PAM100': sns.xkcd_rgb["purplish"],
+                  'PAM250': sns.xkcd_rgb["golden yellow"]
+                  }
 
     for matrix in score_dict:
         # Combine true_pos and false_pos score lists
@@ -274,7 +398,10 @@ def generate_ROC(score_dict):
 
         # Count and append hits to x-axis and y-axis lists
         for tick in ruler:
-            x.append(len([element for element in score_dict[matrix]['fp'] if element >= tick and element >= score_dict[matrix]['threshold']])/fp_threshold_count)
+            if fp_threshold_count == 0:
+                x.append(0)
+            else:
+                x.append(len([element for element in score_dict[matrix]['fp'] if element >= tick and element >= score_dict[matrix]['threshold']])/fp_threshold_count)
             y.append(len([element for element in score_dict[matrix]['tp'] if element >= tick and element >= score_dict[matrix]['threshold']])/tp_threshold_count)
 
         plt.plot(x, y, color=colors[matrix], lw=lw, label=matrix)
@@ -284,10 +411,15 @@ def generate_ROC(score_dict):
     plt.ylim([0.0, 1.0])
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
-    plt.title('Receiver operating characteristic - Raw')
+    if optimized:
+        plt.title('Receiver operating characteristic - Optimized vs. Default BLOSUM62')
+    else:
+        plt.title('Receiver operating characteristic - Raw')
+
     plt.legend(loc="lower right")
     plt.show()
-    fig.savefig('Matrix_ROC-Raw-10-2.pdf', dpi=300)
+
+    fig.savefig('BLOSUM62-Optimized_vs_Default.pdf', dpi=300)
 
 
 def run_alignments(seq_align, save_output=None):
@@ -342,7 +474,7 @@ def _crappy_parser(file_name):
         return seq_list
 
 
-def matrix_optimization():
+def matrix_optimization(matrix_to_optimize):
     """
     Optimize the matrix... somehow...
     Objective function: sum of TPR for FPRs 0, 0.1, 0.2, 0.3
@@ -353,15 +485,24 @@ def matrix_optimization():
     Calculate objective function value
         If current < previous, accept new matrix
         Else, calculate boltzmann probability (e^-(d(score / kT))), accept if > ( 0 > randint > 1 )
-    Increment temperature every 100 or so iterations
+    Increment temperature every 2000 or so iterations
 
-    This is going to be super slow...
+    This is going to be super slow... (nevermind, fast enough)
+
+    Matricies optimized so far:
+    BLOSUM62: 4.0
+    MATIO: 2.06
     """
+    substitution_matrices = {'BLOSUM50': 6,
+                             'BLOSUM62': 6,
+                             'MATIO': 2,
+                             'PAM100': 9,
+                             'PAM250': 9
+                             }
 
-    # Set substitution matrix to PAM100
-    # working_substitution_matrix = pd.read_table(open('./BLOSUM62'), delim_whitespace=True, header=6)
-    # possible_AA = working_substitution_matrix.columns.values
-    # working_substitution_matrix = working_substitution_matrix.set_index(possible_AA)
+    # Set substitution matrix (this is used at the very end)
+    substitution_matrix = pd.read_table(open('./{}'.format(matrix_to_optimize)), delim_whitespace=True, header=substitution_matrices[matrix_to_optimize])
+    substitution_matrix_indicies = substitution_matrix.columns.values
 
     # Set gap penalties
     gap_opening = -7
@@ -369,42 +510,22 @@ def matrix_optimization():
 
     # Import saved positive and negative alignments and save to list of lists
     # [Seq_A, bar_things, Seq_B]
-    neg_seq_list = _crappy_parser('Alignments-neg.txt')
-    pos_seq_list = _crappy_parser('Alignments-pos.txt')
+    neg_seq_list = _crappy_parser('Alignments-{}-neg.txt'.format(matrix_to_optimize))
+    pos_seq_list = _crappy_parser('Alignments-{}-pos.txt'.format(matrix_to_optimize))
 
     # Calculate AA frequencies in Positive alignments
     all_pos_align_sequences = [element[0] + element[2] for element in pos_seq_list]
     one_big_pos_sequence = re.sub('[^ARNDCQEGHILKMFPSTWYVBZX*]', '', ''.join(all_pos_align_sequences))
 
-    mat_dict = {'A': 0,
-                'R': 1,
-                'N': 2,
-                'D': 3,
-                'C': 4,
-                'Q': 5,
-                'E': 6,
-                'G': 7,
-                'H': 8,
-                'I': 9,
-                'L': 10,
-                'K': 11,
-                'M': 12,
-                'F': 13,
-                'P': 14,
-                'S': 15,
-                'T': 16,
-                'W': 17,
-                'Y': 18,
-                'V': 19,
-                'B': 20,
-                'Z': 21,
-                'X': 22,
-                '*': 23
+    mat_dict = {'A': 0, 'R': 1, 'N': 2, 'D': 3, 'C': 4, 'Q': 5,
+                'E': 6, 'G': 7, 'H': 8, 'I': 9, 'L': 10, 'K': 11,
+                'M': 12, 'F': 13, 'P': 14, 'S': 15, 'T': 16, 'W': 17,
+                'Y': 18, 'V': 19, 'B': 20, 'Z': 21, 'X': 22, '*': 23
                 }
 
     # MC!
     accepted_matrix = None
-    current_matrix = np.loadtxt('BLOSUM62', skiprows=7)
+    current_matrix = np.loadtxt(matrix_to_optimize, skiprows=(substitution_matrices[matrix_to_optimize] + 1))
     print(current_matrix)
 
     accepted_TPR = 0
@@ -415,7 +536,7 @@ def matrix_optimization():
     # Run MC
     for temperature in temperatures:
         print("Current Temp: {}".format(temperature))
-        for increment in range(2000):
+        for increment in range(2000): #2000
             # Generate new matrix
             first_AA = mat_dict[random.choice(one_big_pos_sequence)]
             second_AA = mat_dict[random.choice(one_big_pos_sequence)]
@@ -502,10 +623,12 @@ def matrix_optimization():
                     #
                     #       current_matrix = accepted_matrix
 
-
-            # sys.exit()
-
-    optimized_matrix = np.savetxt("Optimized_matrix.csv", accepted_matrix, delimiter=",")
+    # Hacky method to save optimized matrix in same format as the ones provided
+    np.savetxt("Optimized_matrix-temp.csv", accepted_matrix, delimiter=",")
+    mat_dict_rev = {mat_dict[res]: res for res in mat_dict}
+    temp = pd.DataFrame.from_csv("Optimized_matrix-temp.csv", header=None, index_col=None).set_index(substitution_matrix_indicies)
+    temp.rename(columns=mat_dict_rev, inplace=True)
+    temp.to_csv("{}-Optimized".format(matrix_to_optimize), sep='\t', index=None)
 
 
 if __name__ == '__main__':
@@ -525,12 +648,14 @@ if __name__ == '__main__':
     seq_align = align()
 
     # Set substitution matrix
-    if args['<substitution_matrix>']:
+    if args['align']:
         # Initialize variables and stuff
 
         substitution_matrices = {'BLOSUM50': 6,
                                  'BLOSUM62': 6,
+                                 'BLOSUM62-Optimized': 0,
                                  'MATIO': 2,
+                                 'MATIO-Optimized': 0,
                                  'PAM100': 9,
                                  'PAM250': 9
                                  }
@@ -544,8 +669,6 @@ if __name__ == '__main__':
 
         seq_align.substitution_matrix.to_csv('{}.csv'.format(args['<substitution_matrix>']))
 
-    # Import sequences to align
-    if args['<sequence_pairs>']:
         seq_align.working_pairs = open(args['<sequence_pairs>'])
         run_alignments(seq_align, args['--output'])
 
@@ -561,7 +684,10 @@ if __name__ == '__main__':
         else:
             normalize = False
 
-        compare_matrices(normalize)
+        if args['--compare_optimized']:
+            compare_optimized(args['--compare_optimized'])
+        else:
+            compare_matrices(normalize)
 
     if args['optimize'] == True:
-        matrix_optimization()
+        matrix_optimization(args['<matrix_to_optimize>'])
