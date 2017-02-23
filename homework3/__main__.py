@@ -287,7 +287,7 @@ def generate_ROC(score_dict):
     plt.title('Receiver operating characteristic - Raw')
     plt.legend(loc="lower right")
     plt.show()
-    fig.savefig('Matrix_ROC-Raw.pdf', dpi=300)
+    fig.savefig('Matrix_ROC-Raw-10-2.pdf', dpi=300)
 
 
 def run_alignments(seq_align, save_output=None):
@@ -359,13 +359,13 @@ def matrix_optimization():
     """
 
     # Set substitution matrix to PAM100
-    working_substitution_matrix = pd.read_table(open('./BLOSUM50'), delim_whitespace=True, header=6)
-    possible_AA = working_substitution_matrix.columns.values
-    working_substitution_matrix = working_substitution_matrix.set_index(possible_AA)
+    # working_substitution_matrix = pd.read_table(open('./BLOSUM62'), delim_whitespace=True, header=6)
+    # possible_AA = working_substitution_matrix.columns.values
+    # working_substitution_matrix = working_substitution_matrix.set_index(possible_AA)
 
     # Set gap penalties
-    gap_opening = -6
-    gap_extension = -4
+    gap_opening = -7
+    gap_extension = -2
 
     # Import saved positive and negative alignments and save to list of lists
     # [Seq_A, bar_things, Seq_B]
@@ -404,23 +404,28 @@ def matrix_optimization():
 
     # MC!
     accepted_matrix = None
-    current_matrix = working_substitution_matrix.values
+    current_matrix = np.loadtxt('BLOSUM62', skiprows=7)
+    print(current_matrix)
+
     accepted_TPR = 0
-    temperatures = [1, 0.8, 0.6, 0.4, 0.2, 0.1]
+    temperatures = [0.01, 0.002, 0.0004, 0.00008, 0.000016, 0.0000032]
 
     import random
 
     # Run MC
     for temperature in temperatures:
         print("Current Temp: {}".format(temperature))
-        for increment in range(100):
+        for increment in range(2000):
             # Generate new matrix
             first_AA = mat_dict[random.choice(one_big_pos_sequence)]
             second_AA = mat_dict[random.choice(one_big_pos_sequence)]
 
+            perturb = random.uniform(-1, 1)
+            previous_value = current_matrix[first_AA, second_AA]
+
             # Maintain symmetry
-            current_matrix[first_AA, second_AA] = current_matrix[first_AA, second_AA] + random.uniform(-1, 1) * temperature
-            current_matrix[second_AA, first_AA] = current_matrix[first_AA, second_AA] + random.uniform(-1, 1) * temperature
+            current_matrix.itemset((first_AA, second_AA), (previous_value + perturb))
+            current_matrix.itemset((second_AA, first_AA), (previous_value + perturb))
 
             # Get FP thresholds from saved alignment
             FP_scores = []
@@ -428,10 +433,6 @@ def matrix_optimization():
             extending = False
 
             for alignment in neg_seq_list:
-
-                # print(alignment[0])
-                # print(alignment[1])
-                # print(alignment[2])
 
                 for seq_A, seq_B in zip(alignment[0], alignment[2]):
                     if seq_A == '-' or seq_B == '-':
@@ -445,15 +446,12 @@ def matrix_optimization():
                         current_score.append(current_matrix[mat_dict[seq_A], mat_dict[seq_B]])
                         extending = False
 
-                print(current_score)
-                print(sum(current_score))
-
                 FP_scores.append(sum(current_score))
                 current_score = []
 
             # Calculate TP scores and get TPR for each FP threshold
             FP_thresholds = [sorted(FP_scores)[49], sorted(FP_scores)[44], sorted(FP_scores)[39], sorted(FP_scores)[34]]
-            print('FP_Thresholds: {}'.format(FP_thresholds))
+            # print('FP_Thresholds: {}'.format(FP_thresholds))
 
             TP_scores = []
             current_score = []
@@ -472,28 +470,40 @@ def matrix_optimization():
                         current_score.append(current_matrix[mat_dict[seq_A], mat_dict[seq_B]])
                         extending = False
 
-                print(current_score)
-                print(sum(current_score), '\n')
-
                 TP_scores.append(sum(current_score))
                 current_score = []
 
             sum_TPR = sum([len([element for element in TP_scores if element > threshold])/50 for threshold in FP_thresholds])
 
-            print([len([element for element in TP_scores if element > threshold])/50 for threshold in FP_thresholds])
-            print(TP_scores)
-            print('sum_TPR: {}'.format(sum_TPR))
+            # print('TP_scores:', TP_scores)
+            # print('sum_TPR: {}'.format(sum_TPR))
 
             # Reject/Accept
             if sum_TPR > accepted_TPR:
+                print('\nNEW MATRIX ACCEPTED (Score: {})\n'.format(sum_TPR))
                 accepted_TPR = sum_TPR
                 accepted_matrix = current_matrix
+                np.savetxt('best_matrix.csv', accepted_matrix, delimiter=',')
             else:
                 pass_limit = random.uniform(0, 1)
-                boltz = np.exp(-((sum_TPR - accepted_TPR)/temperature))
+                boltz = np.exp(-((accepted_TPR - sum_TPR)/temperature))
                 if boltz > pass_limit:
                     accepted_TPR = sum_TPR
                     accepted_matrix = current_matrix
+                    np.savetxt('best_matrix.csv', accepted_matrix, delimiter=',')
+                else:
+                    print('\nNEW MATRIX REJECTED\n')
+                    current_matrix = np.loadtxt('best_matrix.csv', delimiter=',')
+
+                    # Note: I'm super aware that this is kind of stupid since I'm writing the matrix to file every time
+                    #       I accept the matrix and reload it every time it is rejected, but for some reason the line
+                    #       below doesn't seem to work... I think it just makes a copy and doesn't let me edit it. It's
+                    #       a nasty hack but I'm short on time. :/
+                    #
+                    #       current_matrix = accepted_matrix
+
+
+            # sys.exit()
 
     optimized_matrix = np.savetxt("Optimized_matrix.csv", accepted_matrix, delimiter=",")
 
