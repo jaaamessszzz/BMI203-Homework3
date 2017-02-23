@@ -14,8 +14,8 @@ class align(object):
         self.seq_B = None
 
         # Gap opening and extension related
-        self.gap_opening_penalty = -10
-        self.gap_extension_penalty = -2
+        self.gap_opening_penalty = -7
+        self.gap_extension_penalty = -3
         # Keep track of gap openings across rows (iterate over rows to fill matrix so this is easy)
         self.extending_gap = False
 

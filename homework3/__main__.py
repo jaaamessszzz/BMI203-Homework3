@@ -146,7 +146,7 @@ def determine_gap_penalties():
 
     gap_thresholds.to_csv('False_Positives.csv')
 
-def compare_matrices(normalize, compare_optimized):
+def compare_matrices(normalize):
     """
     Compare the different substitution matrices in terms of false positives
 
@@ -245,7 +245,7 @@ def compare_optimized(matrix):
     """
     # Initialize
     gap_opening = -7
-    gap_extension = -2
+    gap_extension = -3
 
     # Import sequence alignments to list of lists
     default_pos = _crappy_parser('Alignments-{}-pos.txt'.format(matrix))
@@ -260,6 +260,7 @@ def compare_optimized(matrix):
                              'MATIO': 2,
                              'MATIO-Optimized': 0,
                              'PAM100': 9,
+                             'PAM100-Optimized': 0,
                              'PAM250': 9
                              }
 
@@ -412,14 +413,14 @@ def generate_ROC(score_dict, optimized=False):
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
     if optimized:
-        plt.title('Receiver operating characteristic - Optimized vs. Default BLOSUM62')
+        plt.title('Receiver operating characteristic - Optimized vs. Default MATIO')
     else:
-        plt.title('Receiver operating characteristic - Raw')
+        plt.title('Receiver operating characteristic - Normalized')
 
     plt.legend(loc="lower right")
     plt.show()
 
-    fig.savefig('BLOSUM62-Optimized_vs_Default.pdf', dpi=300)
+    fig.savefig('MATIO-Optimized_vs_Default.pdf', dpi=300)
 
 
 def run_alignments(seq_align, save_output=None):
@@ -506,7 +507,7 @@ def matrix_optimization(matrix_to_optimize):
 
     # Set gap penalties
     gap_opening = -7
-    gap_extension = -2
+    gap_extension = -3
 
     # Import saved positive and negative alignments and save to list of lists
     # [Seq_A, bar_things, Seq_B]
@@ -536,7 +537,7 @@ def matrix_optimization(matrix_to_optimize):
     # Run MC
     for temperature in temperatures:
         print("Current Temp: {}".format(temperature))
-        for increment in range(2000): #2000
+        for increment in range(2500): #2000
             # Generate new matrix
             first_AA = mat_dict[random.choice(one_big_pos_sequence)]
             second_AA = mat_dict[random.choice(one_big_pos_sequence)]
@@ -657,6 +658,7 @@ if __name__ == '__main__':
                                  'MATIO': 2,
                                  'MATIO-Optimized': 0,
                                  'PAM100': 9,
+                                 'PAM100-Optimized': 0,
                                  'PAM250': 9
                                  }
 
