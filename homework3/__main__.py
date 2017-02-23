@@ -318,11 +318,7 @@ def compare_optimized(matrix):
 
                 scores.append(sum(current_score))
 
-            score_lists['-'.join([matrix, alignment])] = scores
-
-
-    import pprint
-    pprint.pprint(score_lists)
+            score_lists['-'.join([matrix, alignment])] = sorted(scores)
 
     # Construct score_dict
     score_dict = {'default_matrix-default_alignments': {'tp': score_lists['default_matrix-default_pos'],
@@ -338,6 +334,9 @@ def compare_optimized(matrix):
                                                             'threshold': score_lists['optimized_matrix-optimized_pos'][14]
                                                             }
                   }
+
+    import pprint
+    pprint.pprint(score_dict)
 
     generate_ROC(score_dict, optimized=True)
 
