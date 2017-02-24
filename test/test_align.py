@@ -16,36 +16,36 @@ def test_align():
     seq_align.substitution_matrix = pd.read_table(open('./BLOSUM50'), delim_whitespace=True, header=6)
     seq_align.substitution_matrix = seq_align.substitution_matrix.set_index(seq_align.substitution_matrix.columns.values)
 
-    for test_pair in test_pairs:
-        print(test_pair)
+    for index, test_pair in enumerate(test_pairs):
         seq_align.working_pairs = [test_pair]
         A, bar, B = run_alignments(seq_align)
 
-        if test_pair.strip() == "test/test_1.fa  test/test_2.fa":
+        if index == 0:
             assert A == "RRRRRAAAAA", (A, type(A))
             assert bar == "||||||||||", (bar, type(bar))
             assert B == "RRRRRAAAAA", (B, type(B))
 
-        elif test_pair.strip() == "test/test_3.fa  test/test_4.fa":
+        elif index == 1:
             assert A == None, (A, type(A))
             assert bar == None, (bar, type(bar))
             assert B == None, (B, type(B))
 
-        elif test_pair.strip() == "test/test_1.fa  test/test_3.fa":
+
+        elif index == 2:
             assert A == "WWWWWWWWWWWWWWW", (A, type(A))
-            assert bar == "|||||||||||||||", (bar, type(A))
-            assert B == "WWWWWWWWWWWWWWW", (B, type(A))
+            assert bar == "|||||||||||||||", (bar, type(bar))
+            assert B == "WWWWWWWWWWWWWWW", (B, type(B))
 
-        elif test_pair.strip() == "test/test_2.fa  test/test_4.fa":
+        elif index == 3:
             assert A == "AAAAAAAAAAAAAAA", (A, type(A))
-            assert bar == "|||||||||||||||", (bar, type(A))
-            assert B == "AAAAAAAAAAAAAAA", (B, type(A))
+            assert bar == "|||||||||||||||", (bar, type(bar))
+            assert B == "AAAAAAAAAAAAAAA", (B, type(B))
 
-        elif test_pair.strip() == "test/test_5.fa  test/test_6.fa":
+        elif index == 4:
             assert A == "ASDFASDFASDF--DFASD--SDFASDFASDFASDF", (A, type(A))
-            assert bar == "||:|||:|||:|  :|||:  |:|||:|||:|||:|", (bar, type(A))
-            assert B == "ASHFASHFASHFASHFASHFASHFASHFASHFASHF", (B, type(A))
+            assert bar == "||:|||:|||:|  :|||:  |:|||:|||:|||:|", (bar, type(bar))
+            assert B == "ASHFASHFASHFASHFASHFASHFASHFASHFASHF", (B, type(B))
 
         else:
-            assert False==True, (test_pair, type(test_pair))
+            assert False == True, (test_pair, type(test_pair))
 
