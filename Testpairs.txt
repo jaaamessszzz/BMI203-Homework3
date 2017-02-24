@@ -1,0 +1,5 @@
+test/test_1.fa  test/test_2.fa
+test/test_3.fa  test/test_4.fa
+test/test_1.fa  test/test_3.fa
+test/test_2.fa  test/test_4.fa
+test/test_5.fa  test/test_6.fa
