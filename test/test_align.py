@@ -16,6 +16,8 @@ def test_align():
     seq_align.substitution_matrix = pd.read_table(open('./BLOSUM50'), delim_whitespace=True, header=6)
     seq_align.substitution_matrix = seq_align.substitution_matrix.set_index(seq_align.substitution_matrix.columns.values)
 
+    print(seq_align.working_pairs)
+    
     for testpair in seq_align.working_pairs:
         A, bar, B = run_alignments(testpair)
         if testpair == "test/test_1.fa  test/test_2.fa":
