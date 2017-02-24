@@ -26,9 +26,9 @@ def test_align():
             assert B == "RRRRRAAAAA", (B, type(B))
 
         elif index == 1:
-            assert A == None, (A, type(A))
-            assert bar == None, (bar, type(bar))
-            assert B == None, (B, type(B))
+            assert A == '', (A, type(A))
+            assert bar == '', (bar, type(bar))
+            assert B == '', (B, type(B))
 
 
         elif index == 2:
